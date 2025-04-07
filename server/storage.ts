@@ -1,9 +1,12 @@
 import { 
-  users, type User, type InsertUser,
+  users, accounts, emails, settings,
+  type User, type InsertUser,
   type Account, type InsertAccount, 
   type Email, type InsertEmail,
   type Settings, type UpdateSettings
 } from "@shared/schema";
+import { db } from "./db";
+import { eq, and, desc } from "drizzle-orm";
 
 export interface IStorage {
   // User methods
@@ -187,4 +190,196 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+export class DatabaseStorage implements IStorage {
+  // User methods
+  async getUser(id: number): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const [user] = await db
+      .insert(users)
+      .values(insertUser)
+      .returning();
+    return user;
+  }
+  
+  // Account methods
+  async getAllAccounts(): Promise<Account[]> {
+    const accountList = await db.select().from(accounts);
+    return accountList.map(account => ({
+      ...account,
+      lastChecked: account.lastChecked ? new Date(account.lastChecked) : null,
+      createdAt: new Date(account.createdAt!)
+    }));
+  }
+  
+  async getAccount(id: number): Promise<Account | undefined> {
+    const [account] = await db.select().from(accounts).where(eq(accounts.id, id));
+    if (!account) return undefined;
+    
+    return {
+      ...account,
+      lastChecked: account.lastChecked ? new Date(account.lastChecked) : null,
+      createdAt: new Date(account.createdAt!)
+    };
+  }
+  
+  async getAccountByEmail(email: string): Promise<Account | undefined> {
+    const [account] = await db.select().from(accounts).where(eq(accounts.email, email));
+    if (!account) return undefined;
+    
+    return {
+      ...account,
+      lastChecked: account.lastChecked ? new Date(account.lastChecked) : null,
+      createdAt: new Date(account.createdAt!)
+    };
+  }
+  
+  async createAccount(insertAccount: InsertAccount): Promise<Account> {
+    const [account] = await db
+      .insert(accounts)
+      .values({
+        ...insertAccount,
+        status: "active",
+        unreadCount: 0,
+        autoMaintain: true
+      })
+      .returning();
+      
+    return {
+      ...account,
+      lastChecked: account.lastChecked ? new Date(account.lastChecked) : null,
+      createdAt: new Date(account.createdAt!)
+    };
+  }
+  
+  async updateAccount(id: number, data: Partial<Account>): Promise<Account> {
+    const [account] = await db
+      .update(accounts)
+      .set(data)
+      .where(eq(accounts.id, id))
+      .returning();
+      
+    if (!account) {
+      throw new Error(`Account with ID ${id} not found`);
+    }
+    
+    return {
+      ...account,
+      lastChecked: account.lastChecked ? new Date(account.lastChecked) : null,
+      createdAt: new Date(account.createdAt!)
+    };
+  }
+  
+  async deleteAccount(id: number): Promise<void> {
+    // Emails will be automatically deleted due to foreign key constraint with cascade delete
+    await db.delete(accounts).where(eq(accounts.id, id));
+  }
+  
+  // Email methods
+  async getEmailsByAccountId(accountId: number): Promise<Email[]> {
+    const emailList = await db
+      .select()
+      .from(emails)
+      .where(eq(emails.accountId, accountId))
+      .orderBy(desc(emails.receivedAt)); // Sort newest first
+      
+    return emailList.map(email => ({
+      ...email,
+      receivedAt: new Date(email.receivedAt!)
+    }));
+  }
+  
+  async getEmail(id: number): Promise<Email | undefined> {
+    const [email] = await db.select().from(emails).where(eq(emails.id, id));
+    if (!email) return undefined;
+    
+    return {
+      ...email,
+      receivedAt: new Date(email.receivedAt!)
+    };
+  }
+  
+  async createEmail(insertEmail: InsertEmail): Promise<Email> {
+    const [email] = await db
+      .insert(emails)
+      .values({
+        ...insertEmail,
+        isRead: false
+      })
+      .returning();
+      
+    return {
+      ...email,
+      receivedAt: new Date(email.receivedAt!)
+    };
+  }
+  
+  async updateEmail(id: number, data: Partial<Email>): Promise<Email> {
+    const [email] = await db
+      .update(emails)
+      .set(data)
+      .where(eq(emails.id, id))
+      .returning();
+      
+    if (!email) {
+      throw new Error(`Email with ID ${id} not found`);
+    }
+    
+    return {
+      ...email,
+      receivedAt: new Date(email.receivedAt!)
+    };
+  }
+  
+  // Settings methods
+  async getSettings(): Promise<Settings> {
+    const [setting] = await db.select().from(settings);
+    
+    // Create default settings if none exist
+    if (!setting) {
+      const [newSetting] = await db
+        .insert(settings)
+        .values({
+          maintenanceFrequency: "every-3-days",
+          emailCheckFrequency: "every-hour",
+          notifyLogin: true,
+          notifyEmails: true,
+          notifyWarnings: true
+        })
+        .returning();
+        
+      return newSetting;
+    }
+    
+    return setting;
+  }
+  
+  async updateSettings(data: Partial<UpdateSettings>): Promise<Settings> {
+    const [currentSettings] = await db.select().from(settings);
+    
+    // If settings don't exist, create them
+    if (!currentSettings) {
+      return this.getSettings();
+    }
+    
+    // Update existing settings
+    const [updated] = await db
+      .update(settings)
+      .set(data)
+      .where(eq(settings.id, currentSettings.id))
+      .returning();
+      
+    return updated;
+  }
+}
+
+// Use the database implementation
+export const storage = new DatabaseStorage();

@@ -1,4 +1,5 @@
 import { pgTable, text, serial, integer, boolean, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -22,7 +23,7 @@ export const accounts = pgTable("accounts", {
 
 export const emails = pgTable("emails", {
   id: serial("id").primaryKey(),
-  accountId: integer("account_id").notNull(),
+  accountId: integer("account_id").notNull().references(() => accounts.id, { onDelete: 'cascade' }),
   sender: text("sender").notNull(),
   subject: text("subject").notNull(),
   content: text("content").notNull(),
@@ -39,6 +40,18 @@ export const settings = pgTable("settings", {
   notifyEmails: boolean("notify_emails").default(true),
   notifyWarnings: boolean("notify_warnings").default(true),
 });
+
+// Define relations
+export const accountsRelations = relations(accounts, ({ many }) => ({
+  emails: many(emails),
+}));
+
+export const emailsRelations = relations(emails, ({ one }) => ({
+  account: one(accounts, {
+    fields: [emails.accountId],
+    references: [accounts.id],
+  }),
+}));
 
 // Account schemas
 export const insertAccountSchema = createInsertSchema(accounts).omit({
