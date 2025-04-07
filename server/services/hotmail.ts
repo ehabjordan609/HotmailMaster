@@ -135,8 +135,8 @@ export const hotmailService = {
         
         // Thử cả hai cách để xác định phiên bản UI nào đang được sử dụng
         const isNewUI = await Promise.race([
-          page.waitForSelector('input[name="MemberName"]', { timeout: 5000 }).then(() => true).catch(() => false),
-          page.waitForSelector('#MemberName', { timeout: 5000 }).then(() => true).catch(() => false)
+          page.waitForSelector('input[name="New email"]', { timeout: 5000 }).then(() => true).catch(() => false),
+          page.waitForSelector('#usernameInput', { timeout: 5000 }).then(() => true).catch(() => false)
         ]);
         
         if (isNewUI) {
@@ -144,17 +144,19 @@ export const hotmailService = {
           console.log('Entering email address (new UI)');
           // Kiểm tra cả hai selector có thể có
           try {
-            await page.waitForSelector('input[name="MemberName"]', { timeout: 5000 });
-            await page.type('input[name="MemberName"]', username);
+            await page.waitForSelector('input[name="New email"]', { timeout: 5000 });
+            await page.type('input[name="New email"]', username);
+            console.log('input[name="New email"]', username);
           } catch (e) {
-            await page.waitForSelector('#MemberName', { timeout: 5000 });
-            await page.type('#MemberName', username);
+            await page.waitForSelector('#usernameInput', { timeout: 5000 });
+            await page.type('#usernameInput', username);
+            console.log('#MemberName Fail', username);
           }
           
           // Tìm nút tiếp theo bằng nhiều cách khác nhau
           try {
-            await page.waitForSelector('#iSignupAction', { timeout: 5000 });
-            await page.click('#iSignupAction');
+            await page.waitForSelector('#nextButton', { timeout: 5000 });
+            await page.click('#nextButton');
           } catch (e) {
             try {
               await page.waitForSelector('input[type="submit"]', { timeout: 5000 });
@@ -171,8 +173,8 @@ export const hotmailService = {
           // Step 2: Enter password
           console.log('Entering password');
           try {
-            await page.waitForSelector('#PasswordInput', { timeout: 5000 });
-            await page.type('#PasswordInput', password);
+            await page.waitForSelector('#Password', { timeout: 5000 });
+            await page.type('#Password', password);
           } catch (e) {
             await page.waitForSelector('input[name="Password"]', { timeout: 5000 });
             await page.type('input[name="Password"]', password);
@@ -180,8 +182,8 @@ export const hotmailService = {
           
           // Nhấn nút tiếp theo
           try {
-            await page.waitForSelector('#iSignupAction', { timeout: 5000 });
-            await page.click('#iSignupAction');
+            await page.waitForSelector('#nextButton', { timeout: 5000 });
+            await page.click('#nextButton');
           } catch (e) {
             try {
               await page.waitForSelector('input[type="submit"]', { timeout: 5000 });
@@ -198,19 +200,19 @@ export const hotmailService = {
           // Step 3: Enter personal information
           console.log('Entering personal information');
           try {
-            await page.waitForSelector('#FirstName', { timeout: 5000 });
-            await page.type('#FirstName', personalInfo.firstName);
-            await page.type('#LastName', personalInfo.lastName);
+            await page.waitForSelector('#firstNameInput', { timeout: 5000 });
+            await page.type('#firstNameInput', personalInfo.firstName);
+            await page.type('#lastNameInput', personalInfo.lastName);
           } catch (e) {
-            await page.waitForSelector('input[name="FirstName"]', { timeout: 5000 });
-            await page.type('input[name="FirstName"]', personalInfo.firstName);
-            await page.type('input[name="LastName"]', personalInfo.lastName);
+            await page.waitForSelector('input[name="firstNameInput"]', { timeout: 5000 });
+            await page.type('input[name="firstNameInput"]', personalInfo.firstName);
+            await page.type('input[name="lastNameInput"]', personalInfo.lastName);
           }
           
           // Nhấn nút tiếp theo
           try {
-            await page.waitForSelector('#iSignupAction', { timeout: 5000 });
-            await page.click('#iSignupAction');
+            await page.waitForSelector('#nextButton', { timeout: 5000 });
+            await page.click('#nextButton');
           } catch (e) {
             try {
               await page.waitForSelector('input[type="submit"]', { timeout: 5000 });
@@ -316,7 +318,7 @@ export const hotmailService = {
             }
           }
         }
-        await page.click('#iSignupAction');
+        await page.click('#nextButton');
         await delay(2000);
         
         // Check for CAPTCHA
