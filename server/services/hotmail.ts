@@ -91,6 +91,7 @@ export const hotmailService = {
       // Launch browser with stealth mode
       browser = await puppeteer.launch({
         headless: process.env.HEADLESS !== 'false', // Set to false for debugging
+        executablePath: '/nix/store/zi4f80l169xlmivz8vja8wlphq74qqk0-chromium-125.0.6422.141/bin/chromium',
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
@@ -366,6 +367,7 @@ export const hotmailService = {
       // Launch browser with stealth mode
       browser = await puppeteer.launch({
         headless: process.env.HEADLESS !== 'false',
+        executablePath: '/nix/store/zi4f80l169xlmivz8vja8wlphq74qqk0-chromium-125.0.6422.141/bin/chromium',
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
@@ -504,6 +506,7 @@ export const hotmailService = {
       // Launch browser with stealth mode
       browser = await puppeteer.launch({
         headless: process.env.HEADLESS !== 'false',
+        executablePath: '/nix/store/zi4f80l169xlmivz8vja8wlphq74qqk0-chromium-125.0.6422.141/bin/chromium',
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
