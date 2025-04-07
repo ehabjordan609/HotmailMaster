@@ -358,7 +358,8 @@ export const hotmailService = {
               try {
                 await page.solveRecaptchas();
                 console.log('CAPTCHA solved successfully');
-                await page.click('#nextButton');
+                await delay(10000);
+                await page.$$('button, input[type="submit"]');
                 captchaDetected = false;
               } catch (solvingError) {
                 console.error('Failed to solve CAPTCHA:', solvingError);
