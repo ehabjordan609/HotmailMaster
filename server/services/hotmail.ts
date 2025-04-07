@@ -87,7 +87,6 @@ export const hotmailService = {
     
     try {
       console.log('Launching browser for real account creation...');
-      
       // Launch browser with stealth mode
       browser = await puppeteer.launch({
         headless: process.env.HEADLESS !== 'false', // Set to false for debugging
