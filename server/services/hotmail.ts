@@ -325,7 +325,6 @@ export const hotmailService = {
             '#captcha',
             '#hipCaptcha',
             '.captchaContainer',
-
           ];
           
           for (const selector of captchaSelectors) {
@@ -345,14 +344,19 @@ export const hotmailService = {
               pageContent.includes('CAPTCHA') ||
               pageContent.includes('verify you\'re not a robot') ||
               pageContent.includes('security check') ||
+              pageContent.includes('Solve a puzzle so we know you\'re not a robot.') ||
               pageContent.includes('robots')
             ) {
               console.log('Co captcha');
               captchaDetected = true;
             }
           }
-          
+          const nextButtons = await page.$$('button');
+          if (nextButtons.length > 0 && pageContent.includes('Solve a puzzle so we know you\'re not a robot.')) {
+            await nextButtons[nextButtons.length - 1].click();
+          }
           if (captchaDetected) {
+
             // If we have an API key, try to solve the CAPTCHA
             if (process.env.CAPTCHA_API_KEY) {
               console.log('Attempting to solve CAPTCHA with API key');
