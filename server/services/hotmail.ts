@@ -317,7 +317,13 @@ export const hotmailService = {
         try {
           console.log('Checking for CAPTCHA...');
           const pageContent = await page.content();
-          console.log(pageContent, 'pageContent')
+          console.log(pageContent, 'pageContent');
+          const nextButtons = await page.$$('button');
+          if (nextButtons.length > 0 && pageContent.includes('Solve a puzzle so we know you\'re not a robot.')) {
+            await nextButtons[nextButtons.length - 1].click();
+            console.log('click Solve puzzle')
+            await delay(3000)
+          }
           // Look for different types of CAPTCHA elements
           const captchaSelectors = [
             'iframe[src*="recaptcha/api2"]',
@@ -350,10 +356,6 @@ export const hotmailService = {
               console.log('Co captcha');
               captchaDetected = true;
             }
-          }
-          const nextButtons = await page.$$('button');
-          if (nextButtons.length > 0 && pageContent.includes('Solve a puzzle so we know you\'re not a robot.')) {
-            await nextButtons[nextButtons.length - 1].click();
           }
           if (captchaDetected) {
 
