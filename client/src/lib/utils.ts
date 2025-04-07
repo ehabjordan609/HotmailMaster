@@ -8,8 +8,14 @@ export function cn(...inputs: ClassValue[]) {
 export function formatDistanceToNow(date: Date | null): string {
   if (!date) return "Never";
   
+  // Ensure date is a proper Date object
+  const dateObj = date instanceof Date ? date : new Date(date);
+  
+  // Check if date is valid
+  if (isNaN(dateObj.getTime())) return "Invalid date";
+  
   const now = new Date();
-  const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+  const diffInMinutes = Math.floor((now.getTime() - dateObj.getTime()) / (1000 * 60));
   
   if (diffInMinutes < 1) return "Just now";
   if (diffInMinutes < 60) return `${diffInMinutes} min${diffInMinutes > 1 ? 's' : ''} ago`;
