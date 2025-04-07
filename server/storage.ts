@@ -215,7 +215,10 @@ export class DatabaseStorage implements IStorage {
     const accountList = await db.select().from(accounts);
     return accountList.map(account => ({
       ...account,
+      status: account.status as "active" | "warning" | "needs-action",
       lastChecked: account.lastChecked ? new Date(account.lastChecked) : null,
+      unreadCount: account.unreadCount || 0,
+      autoMaintain: account.autoMaintain === null ? true : account.autoMaintain,
       createdAt: new Date(account.createdAt!)
     }));
   }
@@ -226,7 +229,10 @@ export class DatabaseStorage implements IStorage {
     
     return {
       ...account,
+      status: account.status as "active" | "warning" | "needs-action",
       lastChecked: account.lastChecked ? new Date(account.lastChecked) : null,
+      unreadCount: account.unreadCount || 0,
+      autoMaintain: account.autoMaintain === null ? true : account.autoMaintain,
       createdAt: new Date(account.createdAt!)
     };
   }
@@ -237,7 +243,10 @@ export class DatabaseStorage implements IStorage {
     
     return {
       ...account,
+      status: account.status as "active" | "warning" | "needs-action",
       lastChecked: account.lastChecked ? new Date(account.lastChecked) : null,
+      unreadCount: account.unreadCount || 0,
+      autoMaintain: account.autoMaintain === null ? true : account.autoMaintain,
       createdAt: new Date(account.createdAt!)
     };
   }
@@ -255,7 +264,10 @@ export class DatabaseStorage implements IStorage {
       
     return {
       ...account,
+      status: account.status as "active" | "warning" | "needs-action",
       lastChecked: account.lastChecked ? new Date(account.lastChecked) : null,
+      unreadCount: account.unreadCount || 0,
+      autoMaintain: account.autoMaintain === null ? true : account.autoMaintain,
       createdAt: new Date(account.createdAt!)
     };
   }
@@ -273,7 +285,10 @@ export class DatabaseStorage implements IStorage {
     
     return {
       ...account,
+      status: account.status as "active" | "warning" | "needs-action",
       lastChecked: account.lastChecked ? new Date(account.lastChecked) : null,
+      unreadCount: account.unreadCount || 0,
+      autoMaintain: account.autoMaintain === null ? true : account.autoMaintain,
       createdAt: new Date(account.createdAt!)
     };
   }
@@ -293,6 +308,7 @@ export class DatabaseStorage implements IStorage {
       
     return emailList.map(email => ({
       ...email,
+      isRead: email.isRead === null ? false : email.isRead,
       receivedAt: new Date(email.receivedAt!)
     }));
   }
@@ -303,6 +319,7 @@ export class DatabaseStorage implements IStorage {
     
     return {
       ...email,
+      isRead: email.isRead === null ? false : email.isRead,
       receivedAt: new Date(email.receivedAt!)
     };
   }
@@ -318,6 +335,7 @@ export class DatabaseStorage implements IStorage {
       
     return {
       ...email,
+      isRead: email.isRead === null ? false : email.isRead,
       receivedAt: new Date(email.receivedAt!)
     };
   }
@@ -335,6 +353,7 @@ export class DatabaseStorage implements IStorage {
     
     return {
       ...email,
+      isRead: email.isRead === null ? false : email.isRead,
       receivedAt: new Date(email.receivedAt!)
     };
   }

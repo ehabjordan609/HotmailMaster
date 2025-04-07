@@ -99,12 +99,28 @@ export const accountController = {
       // Create accounts
       const results = await hotmailService.createBatchAccounts(quantity, prefix);
       
+      // Save the accounts to database
+      const savedAccounts = [];
+      for (const account of results.accounts) {
+        try {
+          const savedAccount = await storage.createAccount({
+            label: account.label,
+            email: account.email,
+            password: account.password,
+            autoMaintain: account.autoMaintain
+          });
+          savedAccounts.push(savedAccount);
+        } catch (error) {
+          console.error(`Failed to save account ${account.email} to database:`, error);
+        }
+      }
+      
       res.status(201).json({
         message: "Batch account creation completed",
         total: quantity,
         created: results.successCount,
         failed: results.failedCount,
-        accounts: results.accounts
+        accounts: savedAccounts.length > 0 ? savedAccounts : results.accounts
       });
     } catch (error) {
       res.status(500).json({ message: "Failed to create batch accounts" });
