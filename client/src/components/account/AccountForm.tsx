@@ -6,6 +6,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle, Info } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -27,6 +29,8 @@ const AccountForm = () => {
   const queryClient = useQueryClient();
   const [showPassword, setShowPassword] = useState(false);
   const [successVisible, setSuccessVisible] = useState(false);
+  const [captchaBlocked, setCaptchaBlocked] = useState(false);
+  const [needCaptchaApiKey, setNeedCaptchaApiKey] = useState(false);
   
   const form = useForm<FormValues>({
     resolver: zodResolver(createAccountSchema),
@@ -57,6 +61,7 @@ const AccountForm = () => {
       // Reset form and show success message
       form.reset();
       setSuccessVisible(true);
+      setCaptchaBlocked(false);
       setTimeout(() => setSuccessVisible(false), 3000);
       
       toast({
@@ -64,7 +69,21 @@ const AccountForm = () => {
         description: "Your new Hotmail account has been created and added to your dashboard.",
       });
     },
-    onError: (error) => {
+    onError: (error: any) => {
+      // Check if the error is due to CAPTCHA
+      if (error.response && error.response.status === 422) {
+        // Set CAPTCHA blocked state
+        setCaptchaBlocked(true);
+        toast({
+          title: "CAPTCHA detected",
+          description: "Account creation was blocked by CAPTCHA. To automatically solve CAPTCHAs, add an API key.",
+          variant: "default"
+        });
+        return;
+      }
+      
+      // For non-CAPTCHA errors
+      setCaptchaBlocked(false);
       toast({
         title: "Error creating account",
         description: error.message || "Something went wrong. Please try again.",
@@ -76,9 +95,62 @@ const AccountForm = () => {
   const onSubmit = (data: FormValues) => {
     createAccountMutation.mutate(data);
   };
+  
+  const handleAddCaptchaKey = () => {
+    setNeedCaptchaApiKey(true);
+    // We'll call the API secrets tool in the main application to request a CAPTCHA API key
+  };
 
   return (
     <Form {...form}>
+      {captchaBlocked && (
+        <Alert className="mb-4 bg-amber-50 border border-amber-200">
+          <AlertCircle className="h-4 w-4 text-amber-500" />
+          <AlertTitle className="text-amber-700">CAPTCHA Detected</AlertTitle>
+          <AlertDescription className="text-amber-700">
+            <p className="mb-2">
+              Account creation was blocked by CAPTCHA. To automatically solve CAPTCHAs, add an API key.
+            </p>
+            <div className="flex gap-2 items-center">
+              <Button 
+                variant="outline" 
+                size="sm"
+                className="text-amber-700 border-amber-300 hover:text-amber-800 hover:bg-amber-100"
+                onClick={handleAddCaptchaKey}
+              >
+                Add CAPTCHA API Key
+              </Button>
+              <span className="text-xs text-amber-600">
+                Automatically solve CAPTCHA challenges
+              </span>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+      
+      {needCaptchaApiKey && (
+        <Alert className="mb-4 bg-blue-50 border border-blue-200">
+          <Info className="h-4 w-4 text-blue-500" />
+          <AlertTitle className="text-blue-700">Add CAPTCHA API Key</AlertTitle>
+          <AlertDescription className="text-blue-700">
+            <p className="mb-2">
+              To solve CAPTCHA challenges automatically, you'll need to add a CAPTCHA solving service API key.
+            </p>
+            <p className="text-xs mb-2">
+              Supported services: NopeCHA, 2Captcha, Anti-Captcha, or CapMonster
+            </p>
+            <Button 
+              variant="outline" 
+              size="sm"
+              className="text-blue-700 border-blue-300 hover:text-blue-800 hover:bg-blue-100"
+              onClick={() => setNeedCaptchaApiKey(false)}
+            >
+              I'll add this later
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
+      
       <form onSubmit={form.handleSubmit(onSubmit)} id="create-account-form" className="space-y-6">
         <FormField
           control={form.control}
@@ -168,7 +240,7 @@ const AccountForm = () => {
             <FormItem className="flex flex-row items-start space-x-2 space-y-0 mt-4">
               <FormControl>
                 <Checkbox
-                  checked={field.value}
+                  checked={field.value as boolean}
                   onCheckedChange={field.onChange}
                   className="h-4 w-4 text-[#0078d4] focus:ring-[#0078d4] border-[#d2d0ce] rounded"
                 />

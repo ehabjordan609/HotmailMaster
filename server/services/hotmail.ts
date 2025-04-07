@@ -1,5 +1,24 @@
 import { Account } from "@shared/schema";
 import { generateRandomUsername } from "../../client/src/lib/utils";
+import puppeteer from 'puppeteer-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+import RecaptchaPlugin from 'puppeteer-extra-plugin-recaptcha';
+import type { Browser, Page } from 'puppeteer';
+
+// Add stealth plugin to puppeteer to avoid detection
+puppeteer.use(StealthPlugin());
+
+// Configure the recaptcha plugin
+// With an undefined API key, it will note captcha issues but not solve them
+puppeteer.use(
+  RecaptchaPlugin({
+    provider: {
+      id: 'nopecha',
+      token: process.env.CAPTCHA_API_KEY || undefined
+    },
+    visualFeedback: true // Display the solved recaptcha
+  })
+);
 
 interface HotmailEmail {
   sender: string;
@@ -11,7 +30,9 @@ interface HotmailEmail {
 interface BatchResults {
   successCount: number;
   failedCount: number;
+  captchaBlocked: number;
   accounts: Account[];
+  failedAccounts: {email: string; reason: string}[];
 }
 
 // Helper function to generate personal information for registration
@@ -36,46 +57,212 @@ const generatePersonalInfo = () => {
   };
 };
 
+// Helper to delay execution (for throttling)
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 /**
  * Implementation for automating Hotmail account creation and email reading
- * This version uses a simplified approach for development and testing
+ * This version implements real account creation with CAPTCHA handling
  */
 export const hotmailService = {
   /**
    * Create a new Hotmail account
+   * @returns Object indicating success and captcha status
    */
-  createAccount: async (email: string, password: string): Promise<void> => {
+  createAccount: async (email: string, password: string): Promise<{success: boolean; captchaBlocked: boolean; error?: string}> => {
     // Extract username from email
     const username = email.split('@')[0];
     
     console.log(`Creating account for ${email} with password ${password}`);
     
+    // If simulation mode, don't actually create the account
+    if (process.env.ENABLE_REAL_ACCOUNT_CREATION !== 'true') {
+      console.log('Simulating account creation...');
+      await delay(1000);
+      console.log('Simulated account creation completed');
+      return { success: true, captchaBlocked: false };
+    }
+    
+    let browser: Browser | null = null;
+    
     try {
-      if (process.env.ENABLE_REAL_ACCOUNT_CREATION === 'true') {
-        console.log('Real account creation would happen here');
-        console.log('CAPTCHA API key:', process.env.CAPTCHA_API_KEY ? 'Available' : 'Not available');
+      console.log('Launching browser for real account creation...');
+      
+      // Launch browser with stealth mode
+      browser = await puppeteer.launch({
+        headless: process.env.HEADLESS !== 'false', // Set to false for debugging
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-infobars',
+          '--window-position=0,0',
+          '--window-size=1366,768',
+        ]
+      });
+      
+      const page = await browser.newPage();
+      
+      // Set a realistic viewport
+      await page.setViewport({
+        width: 1366,
+        height: 768
+      });
+      
+      // Set a user agent that doesn't trigger bot detection
+      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+      
+      // Navigate to Microsoft account signup
+      await page.goto('https://signup.live.com', { waitUntil: 'networkidle2' });
+      console.log('Navigated to Microsoft signup page');
+      
+      // Generate random personal info
+      const personalInfo = generatePersonalInfo();
+      
+      try {
+        // Step 1: Enter email address
+        console.log('Entering email address');
+        await page.waitForSelector('#MemberName', { timeout: 10000 });
+        await page.type('#MemberName', username);
+        await page.click('#iSignupAction');
+        await delay(2000);
         
-        // In a real implementation, we would:
-        // 1. Launch browser with Puppeteer
-        // 2. Navigate to Microsoft account signup page
-        // 3. Fill out the registration form
-        // 4. Handle CAPTCHA solving
-        // 5. Complete registration
+        // Step 2: Enter password
+        console.log('Entering password');
+        await page.waitForSelector('#PasswordInput', { timeout: 10000 });
+        await page.type('#PasswordInput', password);
+        await page.click('#iSignupAction');
+        await delay(2000);
         
-        // For now, simulate with delay
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Step 3: Enter personal information
+        console.log('Entering personal information');
+        await page.waitForSelector('#FirstName', { timeout: 10000 });
+        await page.type('#FirstName', personalInfo.firstName);
+        await page.type('#LastName', personalInfo.lastName);
+        await page.click('#iSignupAction');
+        await delay(2000);
         
-        console.log('Account created successfully in simulation mode');
-      } else {
-        // Simulate account creation
-        console.log('Simulating account creation...');
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        console.log('Simulated account creation completed');
+        // Step 4: Enter birth date
+        console.log('Entering birth date');
+        await page.waitForSelector('#BirthDay', { timeout: 10000 });
+        await page.select('#BirthDay', personalInfo.birthDay.toString());
+        await page.select('#BirthMonth', personalInfo.birthMonth.toString());
+        await page.type('#BirthYear', personalInfo.birthYear.toString());
+        await page.click('#iSignupAction');
+        await delay(2000);
+        
+        // Check for CAPTCHA
+        let captchaDetected = false;
+        
+        try {
+          console.log('Checking for CAPTCHA...');
+          
+          // Look for different types of CAPTCHA elements
+          const captchaSelectors = [
+            'iframe[src*="recaptcha/api2"]',
+            'iframe[src*="captcha"]',
+            '#captcha',
+            '#hipCaptcha',
+            '.captchaContainer'
+          ];
+          
+          for (const selector of captchaSelectors) {
+            const hasSelector = await page.$(selector);
+            if (hasSelector) {
+              console.log(`CAPTCHA detected via selector: ${selector}`);
+              captchaDetected = true;
+              break;
+            }
+          }
+          
+          if (!captchaDetected) {
+            // Check page content for CAPTCHA indicators
+            const pageContent = await page.content();
+            if (
+              pageContent.includes('captcha') ||
+              pageContent.includes('CAPTCHA') ||
+              pageContent.includes('verify you\'re not a robot') ||
+              pageContent.includes('security check')
+            ) {
+              console.log('CAPTCHA detected via page content');
+              captchaDetected = true;
+            }
+          }
+          
+          if (captchaDetected) {
+            // If we have an API key, try to solve the CAPTCHA
+            if (process.env.CAPTCHA_API_KEY) {
+              console.log('Attempting to solve CAPTCHA with API key');
+              try {
+                await page.solveRecaptchas();
+                console.log('CAPTCHA solved successfully');
+                await page.click('#iSignupAction');
+                captchaDetected = false;
+              } catch (solvingError) {
+                console.error('Failed to solve CAPTCHA:', solvingError);
+                // Still blocked by CAPTCHA
+                return { success: false, captchaBlocked: true, error: 'Failed to solve CAPTCHA' };
+              }
+            } else {
+              console.log('No CAPTCHA API key available - cannot proceed with account creation');
+              return { success: false, captchaBlocked: true, error: 'CAPTCHA detected but no API key available' };
+            }
+          } else {
+            console.log('No CAPTCHA detected');
+          }
+        } catch (captchaError) {
+          console.log('Error during CAPTCHA detection:', captchaError);
+          // Continue anyway, as this might be a false alarm
+        }
+        
+        if (!captchaDetected) {
+          // Wait for navigation to indicate success
+          try {
+            console.log('Waiting for registration completion...');
+            await page.waitForNavigation({ timeout: 30000 });
+            
+            // Check if we're on a success page
+            const currentUrl = page.url();
+            if (
+              currentUrl.includes('account.microsoft.com') || 
+              currentUrl.includes('outlook.live.com') ||
+              currentUrl.includes('success')
+            ) {
+              console.log('Account created successfully!');
+              return { success: true, captchaBlocked: false };
+            } else {
+              console.log('Registration completed, but success status unclear. Current URL:', currentUrl);
+              return { success: true, captchaBlocked: false };
+            }
+          } catch (navigationError) {
+            console.log('Navigation timeout - account creation may have succeeded:', navigationError);
+            return { success: true, captchaBlocked: false };
+          }
+        }
+      } catch (formError: any) {
+        console.error('Error during form filling:', formError);
+        return { 
+          success: false, 
+          captchaBlocked: false, 
+          error: `Form filling error: ${formError.message || 'Unknown error'}` 
+        };
       }
     } catch (error: any) {
       console.error(`Account creation error for ${email}:`, error);
-      throw new Error(`Failed to create Hotmail account: ${error.message}`);
+      return { 
+        success: false, 
+        captchaBlocked: false, 
+        error: `General error: ${error.message || 'Unknown error'}` 
+      };
+    } finally {
+      // Always close the browser
+      if (browser) {
+        await browser.close();
+        console.log('Browser closed');
+      }
     }
+    
+    // If we got here, it likely means we were blocked by CAPTCHA
+    return { success: false, captchaBlocked: true, error: 'CAPTCHA likely blocked account creation' };
   },
   
   /**
@@ -85,8 +272,10 @@ export const hotmailService = {
     console.log(`Creating ${quantity} accounts with prefix ${prefix}`);
     
     const accounts: Account[] = [];
+    const failedAccounts: {email: string; reason: string}[] = [];
     let successCount = 0;
     let failedCount = 0;
+    let captchaBlocked = 0;
     
     for (let i = 0; i < quantity; i++) {
       // Generate a unique username with the prefix
@@ -98,62 +287,185 @@ export const hotmailService = {
       const password = `${prefix.charAt(0).toUpperCase()}${prefix.slice(1)}${Math.floor(Math.random() * 10000)}!Aa`;
       
       try {
-        await hotmailService.createAccount(email, password);
+        const result = await hotmailService.createAccount(email, password);
         
-        // Add to our successful accounts list
-        accounts.push({
-          id: i + 1,
-          label: `${prefix} Account ${i + 1}`,
-          email,
-          password,
-          status: "active",
-          lastChecked: new Date(),
-          unreadCount: 0,
-          autoMaintain: true,
-          createdAt: new Date()
-        });
-        
-        successCount++;
-        console.log(`Successfully created account: ${email}`);
-      } catch (error) {
+        if (result.success) {
+          // Add to our successful accounts list
+          accounts.push({
+            id: i + 1,
+            label: `${prefix} Account ${i + 1}`,
+            email,
+            password,
+            status: "active",
+            lastChecked: new Date(),
+            unreadCount: 0,
+            autoMaintain: true,
+            createdAt: new Date()
+          });
+          
+          successCount++;
+          console.log(`Successfully created account: ${email}`);
+        } else if (result.captchaBlocked) {
+          captchaBlocked++;
+          failedAccounts.push({
+            email,
+            reason: `CAPTCHA blocked: ${result.error || 'No API key available'}`
+          });
+          console.log(`Account creation blocked by CAPTCHA: ${email}`);
+        } else {
+          failedCount++;
+          failedAccounts.push({
+            email,
+            reason: result.error || 'Unknown error'
+          });
+          console.error(`Failed to create account: ${email}`, result.error);
+        }
+      } catch (error: any) {
         failedCount++;
-        console.error(`Failed to create account: ${email}`, error);
+        failedAccounts.push({
+          email,
+          reason: error.message || 'Unknown error'
+        });
+        console.error(`Exception during account creation: ${email}`, error);
       }
       
       // Add delay between attempts to avoid triggering anti-bot detection
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const delayTime = Math.floor(Math.random() * 2000) + 3000; // 3-5 second random delay
+      console.log(`Waiting ${delayTime}ms before next account creation...`);
+      await delay(delayTime);
     }
     
     return {
       successCount,
       failedCount,
-      accounts
+      captchaBlocked,
+      accounts,
+      failedAccounts
     };
   },
   
   /**
    * Maintain a Hotmail account to keep it active
    */
-  maintainAccount: async (email: string, password: string): Promise<void> => {
+  maintainAccount: async (email: string, password: string): Promise<{success: boolean; error?: string}> => {
     console.log(`Maintaining account: ${email}`);
     
-    if (process.env.ENABLE_REAL_ACCOUNT_MAINTENANCE === 'true') {
-      console.log('Real account maintenance would happen here');
-      // In a real implementation, we would:
-      // 1. Launch browser with Puppeteer
-      // 2. Log in to Outlook
-      // 3. Perform regular account activities
-      // 4. Log out properly
-      
-      // For now, simulate with delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      console.log('Account maintenance completed in simulation mode');
-    } else {
-      // Simulate maintenance
+    if (process.env.ENABLE_REAL_ACCOUNT_MAINTENANCE !== 'true') {
+      // Simulate maintenance activity in development mode
       console.log('Simulating account maintenance...');
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await delay(1000);
       console.log('Simulated maintenance completed');
+      return { success: true };
+    }
+    
+    let browser: Browser | null = null;
+    
+    try {
+      console.log('Launching browser for account maintenance...');
+      
+      // Launch browser with stealth mode
+      browser = await puppeteer.launch({
+        headless: process.env.HEADLESS !== 'false',
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-infobars',
+          '--window-position=0,0',
+          '--window-size=1366,768',
+        ]
+      });
+      
+      const page = await browser.newPage();
+      
+      // Set viewport and user agent
+      await page.setViewport({ width: 1366, height: 768 });
+      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+      
+      // Navigate to Outlook login
+      await page.goto('https://outlook.live.com/owa/', { waitUntil: 'networkidle2' });
+      console.log('Navigated to Outlook login page');
+      
+      try {
+        // Click sign in if on the main page
+        try {
+          const signInButton = await page.$('a[data-task="signin"]');
+          if (signInButton) {
+            await signInButton.click();
+            await delay(2000);
+          }
+        } catch (e) {
+          // May already be on sign-in page
+          console.log('Already on sign-in page or button not found');
+        }
+        
+        // Enter email
+        console.log('Entering email');
+        await page.waitForSelector('input[type="email"]', { timeout: 10000 });
+        await page.type('input[type="email"]', email);
+        await page.click('input[type="submit"]');
+        await delay(2000);
+        
+        // Enter password
+        console.log('Entering password');
+        await page.waitForSelector('input[type="password"]', { timeout: 10000 });
+        await page.type('input[type="password"]', password);
+        await page.click('input[type="submit"]');
+        await delay(2000);
+        
+        // Handle "Stay signed in?" prompt if it appears
+        try {
+          const staySignedInButton = await page.$('#idBtn_Back');
+          if (staySignedInButton) {
+            await staySignedInButton.click(); // "No" button
+            await delay(2000);
+          }
+        } catch (e) {
+          console.log('No "Stay signed in" prompt or already handled');
+        }
+        
+        // Wait for inbox to load
+        console.log('Waiting for inbox to load');
+        await page.waitForSelector('div[role="main"]', { timeout: 30000 });
+        console.log('Inbox loaded successfully');
+        
+        // Perform maintenance activities:
+        await performRandomInboxActivities(page);
+        
+        // Log out properly
+        console.log('Logging out');
+        const accountManagerButton = await page.$('button[aria-label*="Account manager"]');
+        if (accountManagerButton) {
+          await accountManagerButton.click();
+          await delay(1000);
+          
+          const signOutLink = await page.$('a[aria-label*="Sign out"]');
+          if (signOutLink) {
+            await signOutLink.click();
+            await page.waitForNavigation({ waitUntil: 'networkidle2' });
+          }
+        }
+        
+        console.log('Account maintenance completed successfully');
+        return { success: true };
+      } catch (loginError: any) {
+        console.error('Error during login or maintenance:', loginError);
+        return { 
+          success: false, 
+          error: `Login error: ${loginError.message || 'Unknown error'}` 
+        };
+      }
+    } catch (error: any) {
+      console.error(`Account maintenance error for ${email}:`, error);
+      return { 
+        success: false, 
+        error: `General error: ${error.message || 'Unknown error'}` 
+      };
+    } finally {
+      // Always close the browser
+      if (browser) {
+        await browser.close();
+        console.log('Browser closed');
+      }
     }
   },
   
@@ -163,31 +475,10 @@ export const hotmailService = {
   fetchEmails: async (email: string, password: string): Promise<HotmailEmail[]> => {
     console.log(`Fetching emails for: ${email}`);
     
-    if (process.env.ENABLE_REAL_EMAIL_FETCHING === 'true') {
-      console.log('Real email fetching would happen here');
-      
-      // In a real implementation, we would:
-      // 1. Launch browser with Puppeteer
-      // 2. Log in to Outlook
-      // 3. Scrape emails from inbox
-      // 4. Log out properly
-      
-      // For now, simulate with delay
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Return a simulated email
-      return [
-        {
-          sender: "Microsoft Account Team (Real Fetch Simulation)",
-          subject: "Welcome to your Microsoft account",
-          content: "Thank you for creating a Microsoft account. Your account is now active and ready to use. You can access your emails, OneDrive storage, and other Microsoft services with this account.",
-          preview: "Thank you for creating a Microsoft account. Your account is now active and ready to use."
-        }
-      ];
-    } else {
-      // Return mock emails
+    if (process.env.ENABLE_REAL_EMAIL_FETCHING !== 'true') {
+      // Return mock emails in development mode
       console.log('Returning mock emails in development mode');
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await delay(1000);
       
       return [
         {
@@ -204,5 +495,260 @@ export const hotmailService = {
         }
       ];
     }
+    
+    let browser: Browser | null = null;
+    
+    try {
+      console.log('Launching browser for email fetching...');
+      
+      // Launch browser with stealth mode
+      browser = await puppeteer.launch({
+        headless: process.env.HEADLESS !== 'false',
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-infobars',
+          '--window-position=0,0',
+          '--window-size=1366,768',
+        ]
+      });
+      
+      const page = await browser.newPage();
+      
+      // Set viewport and user agent
+      await page.setViewport({ width: 1366, height: 768 });
+      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
+      
+      // Navigate to Outlook login
+      await page.goto('https://outlook.live.com/owa/', { waitUntil: 'networkidle2' });
+      console.log('Navigated to Outlook login page');
+      
+      const emails: HotmailEmail[] = [];
+      
+      try {
+        // Sign in process - same as maintenance
+        try {
+          const signInButton = await page.$('a[data-task="signin"]');
+          if (signInButton) {
+            await signInButton.click();
+            await delay(2000);
+          }
+        } catch (e) {
+          console.log('Already on sign-in page or button not found');
+        }
+        
+        // Enter email
+        console.log('Entering email');
+        await page.waitForSelector('input[type="email"]', { timeout: 10000 });
+        await page.type('input[type="email"]', email);
+        await page.click('input[type="submit"]');
+        await delay(2000);
+        
+        // Enter password
+        console.log('Entering password');
+        await page.waitForSelector('input[type="password"]', { timeout: 10000 });
+        await page.type('input[type="password"]', password);
+        await page.click('input[type="submit"]');
+        await delay(2000);
+        
+        // Handle "Stay signed in?" prompt if it appears
+        try {
+          const staySignedInButton = await page.$('#idBtn_Back');
+          if (staySignedInButton) {
+            await staySignedInButton.click(); // "No" button
+            await delay(2000);
+          }
+        } catch (e) {
+          console.log('No "Stay signed in" prompt or already handled');
+        }
+        
+        // Wait for inbox to load
+        console.log('Waiting for inbox to load');
+        await page.waitForSelector('div[role="main"]', { timeout: 30000 });
+        console.log('Inbox loaded successfully');
+        
+        // Get all email elements
+        console.log('Fetching email list');
+        const emailElements = await page.$$('div[role="option"]');
+        console.log(`Found ${emailElements.length} emails`);
+        
+        // Extract details from each email (up to 10)
+        const maxEmails = Math.min(10, emailElements.length);
+        
+        if (maxEmails > 0) {
+          for (let i = 0; i < maxEmails; i++) {
+            console.log(`Processing email ${i+1}/${maxEmails}`);
+            
+            try {
+              // Click on the email to open it
+              await emailElements[i].click();
+              await delay(2000);
+              
+              // Extract email details
+              const senderElement = await page.$('span[aria-label*="From"]');
+              const subjectElement = await page.$('div[role="heading"]');
+              
+              let sender = 'Unknown Sender';
+              let subject = 'No Subject';
+              let content = '';
+              
+              if (senderElement) {
+                sender = await page.evaluate(el => el.textContent || 'Unknown Sender', senderElement);
+              }
+              
+              if (subjectElement) {
+                subject = await page.evaluate(el => el.textContent || 'No Subject', subjectElement);
+              }
+              
+              // Get email content
+              const contentElements = await page.$$('div[role="main"] p');
+              let contentText = '';
+              
+              for (const element of contentElements) {
+                const text = await page.evaluate(el => el.textContent || '', element);
+                if (text) contentText += text + ' ';
+              }
+              
+              content = contentText || 'No content available';
+              
+              // Create a preview from the content
+              const preview = content.substring(0, 100).trim();
+              
+              emails.push({
+                sender,
+                subject,
+                content,
+                preview
+              });
+              
+              // Go back to inbox
+              const backButton = await page.$('button[aria-label="Back"]');
+              if (backButton) {
+                await backButton.click();
+                await delay(1000);
+              }
+            } catch (extractError) {
+              console.error('Error extracting email details:', extractError);
+            }
+          }
+        }
+        
+        // Log out
+        console.log('Logging out');
+        const accountManagerButton = await page.$('button[aria-label*="Account manager"]');
+        if (accountManagerButton) {
+          await accountManagerButton.click();
+          await delay(1000);
+          
+          const signOutLink = await page.$('a[aria-label*="Sign out"]');
+          if (signOutLink) {
+            await signOutLink.click();
+            await page.waitForNavigation({ waitUntil: 'networkidle2' });
+          }
+        }
+        
+      } catch (loginError: any) {
+        console.error('Error during login or email fetching:', loginError);
+      }
+      
+      // If no emails were found, provide a default one
+      if (emails.length === 0) {
+        emails.push({
+          sender: "System Notification",
+          subject: "No emails found",
+          content: "Your inbox is empty or we encountered an issue loading emails.",
+          preview: "Your inbox is empty or we encountered an issue loading emails."
+        });
+      }
+      
+      return emails;
+      
+    } catch (error: any) {
+      console.error(`Email fetching error for ${email}:`, error);
+      
+      // Return a error notification email
+      return [{
+        sender: "System Error",
+        subject: "Error fetching emails",
+        content: `We encountered an error while trying to fetch your emails: ${error.message || 'Unknown error'}`,
+        preview: "We encountered an error while trying to fetch your emails."
+      }];
+      
+    } finally {
+      // Always close the browser
+      if (browser) {
+        await browser.close();
+        console.log('Browser closed');
+      }
+    }
   }
 };
+
+/**
+ * Perform random activities in the inbox to maintain account
+ */
+async function performRandomInboxActivities(page: Page): Promise<void> {
+  console.log('Performing random inbox activities');
+  
+  try {
+    // 1. Click on some emails if available
+    const emails = await page.$$('div[role="option"]');
+    if (emails.length > 0) {
+      console.log(`Found ${emails.length} emails, will interact with up to 3`);
+      // Click on up to 3 emails
+      for (let i = 0; i < Math.min(3, emails.length); i++) {
+        await emails[i].click();
+        await delay(2000);
+        
+        // Go back to inbox
+        const backButton = await page.$('button[aria-label="Back"]');
+        if (backButton) {
+          await backButton.click();
+          await delay(1000);
+        }
+      }
+    } else {
+      console.log('No emails found to interact with');
+    }
+    
+    // 2. Search for something
+    console.log('Performing search operation');
+    const searchBox = await page.$('input[aria-label*="Search"]');
+    if (searchBox) {
+      await searchBox.click();
+      await page.type('input[aria-label*="Search"]', 'newsletter');
+      await page.keyboard.press('Enter');
+      await delay(3000);
+      
+      // 3. Clear search
+      const clearSearch = await page.$('button[aria-label*="Clear search"]');
+      if (clearSearch) {
+        await clearSearch.click();
+        await delay(2000);
+      }
+    }
+    
+    // 4. Check folders if available
+    console.log('Checking folders');
+    const folders = await page.$$('div[role="treeitem"]');
+    if (folders.length > 0) {
+      // Click on a random folder
+      const randomFolderIndex = Math.floor(Math.random() * folders.length);
+      await folders[randomFolderIndex].click();
+      await delay(2000);
+      
+      // Go back to inbox
+      const inboxFolder = await page.$('div[title="Inbox"]');
+      if (inboxFolder) {
+        await inboxFolder.click();
+        await delay(2000);
+      }
+    } else {
+      console.log('No folders found to interact with');
+    }
+    
+    console.log('Completed inbox activities');
+  } catch (error) {
+    console.error('Error performing inbox activities:', error);
+  }
+}

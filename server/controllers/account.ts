@@ -64,12 +64,30 @@ export const accountController = {
       
       // Create account in Hotmail
       try {
-        await hotmailService.createAccount(
+        const result = await hotmailService.createAccount(
           validationResult.data.email,
           validationResult.data.password
         );
+        
+        if (!result.success) {
+          if (result.captchaBlocked) {
+            return res.status(422).json({ 
+              message: "Account creation blocked by CAPTCHA", 
+              error: result.error,
+              captchaBlocked: true
+            });
+          } else {
+            return res.status(400).json({ 
+              message: result.error || "Failed to create Hotmail account",
+              captchaBlocked: false
+            });
+          }
+        }
       } catch (error: any) {
-        return res.status(400).json({ message: error.message || "Failed to create Hotmail account" });
+        return res.status(400).json({ 
+          message: error.message || "Failed to create Hotmail account",
+          captchaBlocked: false
+        });
       }
       
       // Store account in our system
@@ -120,7 +138,9 @@ export const accountController = {
         total: quantity,
         created: results.successCount,
         failed: results.failedCount,
-        accounts: savedAccounts.length > 0 ? savedAccounts : results.accounts
+        captchaBlocked: results.captchaBlocked,
+        accounts: savedAccounts.length > 0 ? savedAccounts : results.accounts,
+        failedAccounts: results.failedAccounts || []
       });
     } catch (error) {
       res.status(500).json({ message: "Failed to create batch accounts" });
@@ -167,19 +187,33 @@ export const accountController = {
       
       // Perform maintenance activities to keep account active
       try {
-        await hotmailService.maintainAccount(account.email, account.password);
+        const result = await hotmailService.maintainAccount(account.email, account.password);
         
-        // Update last checked time and status
-        await storage.updateAccount(id, {
-          lastChecked: new Date(),
-          status: "active"
-        });
-        
-        res.json({ message: "Account maintenance completed successfully" });
+        if (result.success) {
+          // Update last checked time and status
+          await storage.updateAccount(id, {
+            lastChecked: new Date(),
+            status: "active"
+          });
+          
+          res.json({ message: "Account maintenance completed successfully" });
+        } else {
+          // Update status to warn about maintenance failure
+          await storage.updateAccount(id, {
+            lastChecked: new Date(),
+            status: "warning"
+          });
+          
+          res.status(400).json({ 
+            message: "Account maintenance failed", 
+            error: result.error 
+          });
+        }
       } catch (error: any) {
         // Update status to warn about maintenance failure
         await storage.updateAccount(id, {
-          status: "warning"
+          lastChecked: new Date(),
+          status: "needs-action"
         });
         
         res.status(400).json({ message: error.message || "Account maintenance failed" });
