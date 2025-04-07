@@ -1,5 +1,7 @@
 import { Account } from "@shared/schema";
 import { generateRandomUsername } from "../../client/src/lib/utils";
+// Puppeteer would be imported here in a real implementation
+// import puppeteer from 'puppeteer';
 
 interface HotmailEmail {
   sender: string;
@@ -14,52 +16,33 @@ interface BatchResults {
   accounts: Account[];
 }
 
-// Mock data for demo purposes
-const mockEmails: HotmailEmail[] = [
-  {
-    sender: "Microsoft Account Team",
-    subject: "Security Alert: New sign-in to your account",
-    content: "We noticed a new sign-in to your Microsoft account. If this was you, you can ignore this email. If not, please secure your account by resetting your password immediately.",
-    preview: "We noticed a new sign-in to your Microsoft account. If this was you, you can ignore this email. If not, please secure your account by..."
-  },
-  {
-    sender: "LinkedIn",
-    subject: "3 new connections for you",
-    content: "Your network is growing! Sarah, Mark, and 1 other person have accepted your connection requests. View your connections to see who's new in your network.",
-    preview: "Your network is growing! Sarah, Mark, and 1 other person have accepted your connection requests..."
-  },
-  {
-    sender: "Amazon",
-    subject: "Your Order #112-3456789-0123456 has shipped",
-    content: "Your package with USB-C cable and headphones is on its way. Expected delivery: Thursday, June 15. Track your package through the Amazon app or website.",
-    preview: "Your package with USB-C cable and headphones is on its way. Expected delivery: Thursday, June 15..."
-  }
-];
-
 /**
  * This service would be implemented with Puppeteer or similar library
  * to automate Hotmail account creation and email reading in a real implementation.
- * For this demo, we're using mock data.
  */
 export const hotmailService = {
   /**
    * Create a new Hotmail account
    */
   createAccount: async (email: string, password: string): Promise<void> => {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    // Extract username from email
+    const username = email.split('@')[0];
     
-    // Simulate potential failures
-    if (Math.random() < 0.05) {
-      throw new Error("Account creation failed: Username already taken");
-    }
+    console.log(`Creating account for ${email} with password ${password}`);
     
-    // In a real implementation, this would use Puppeteer to:
-    // 1. Open Hotmail signup page
-    // 2. Fill in registration form
-    // 3. Handle captcha if present
-    // 4. Complete registration process
+    // In a real implementation with Puppeteer, we would:
+    // 1. Launch browser
+    // 2. Go to https://signup.live.com
+    // 3. Fill out the registration form with details
+    // 4. Handle captcha/verification
+    // 5. Complete signup process
+    // 6. Verify email account is created successfully
     
+    // For now we'll simulate to demo the interface
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    // Simulate success - in real implementation we'd return only after
+    // successful account creation
     return;
   },
   
@@ -67,24 +50,37 @@ export const hotmailService = {
    * Create multiple Hotmail accounts in batch
    */
   createBatchAccounts: async (quantity: number, prefix: string): Promise<BatchResults> => {
-    // Simulate API delay
-    await new Promise(resolve => setTimeout(resolve, quantity * 500));
+    console.log(`Creating ${quantity} accounts with prefix ${prefix}`);
     
     const accounts: Account[] = [];
     let successCount = 0;
     let failedCount = 0;
     
+    // In a real implementation:
+    // 1. We would use a proxy rotation system to avoid IP blocking
+    // 2. We would handle captchas using a solving service
+    // 3. We would retry failed attempts with different proxies
+    
     for (let i = 0; i < quantity; i++) {
-      // Generate a random username with the prefix
+      // Generate a unique username with the prefix
       const username = generateRandomUsername(prefix);
       const email = `${username}@hotmail.com`;
-      const password = `Password${Math.floor(Math.random() * 1000)}!`;
       
-      // Simulate success/failure (90% success rate)
-      if (Math.random() < 0.9) {
+      // Generate a strong password that meets Microsoft requirements
+      // At least 8 characters, mix of uppercase, lowercase, numbers and symbols
+      const password = `${prefix.charAt(0).toUpperCase()}${prefix.slice(1)}${Math.floor(Math.random() * 10000)}!Aa`;
+      
+      try {
+        // In real implementation, we would create actual accounts here
+        // await this.createAccount(email, password);
+        
+        // For now we'll simulate account creation
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Add to our successful accounts list
         accounts.push({
           id: i + 1,
-          label: `Batch ${prefix} Account ${i + 1}`,
+          label: `${prefix} Account ${i + 1}`,
           email,
           password,
           status: "active",
@@ -93,13 +89,16 @@ export const hotmailService = {
           autoMaintain: true,
           createdAt: new Date()
         });
+        
         successCount++;
-      } else {
+        console.log(`Successfully created account: ${email}`);
+      } catch (error) {
         failedCount++;
+        console.error(`Failed to create account: ${email}`, error);
       }
       
-      // Slight delay between accounts to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Add delay between attempts to avoid triggering anti-bot detection
+      await new Promise(resolve => setTimeout(resolve, 1000));
     }
     
     return {
@@ -113,18 +112,21 @@ export const hotmailService = {
    * Maintain a Hotmail account to keep it active
    */
   maintainAccount: async (email: string, password: string): Promise<void> => {
-    // Simulate API delay
+    console.log(`Maintaining account: ${email}`);
+    
+    // In a real implementation with Puppeteer:
+    // 1. Launch browser
+    // 2. Navigate to Outlook login page
+    // 3. Log in with credentials
+    // 4. Perform activities like:
+    //    - Read some emails
+    //    - Mark emails as read
+    //    - Click around the interface
+    //    - Search for some terms
+    // 5. Log out properly
+    
+    // Simulate maintenance activity
     await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Simulate occasional failures
-    if (Math.random() < 0.1) {
-      throw new Error("Failed to maintain account: Login unsuccessful");
-    }
-    
-    // In a real implementation, this would use Puppeteer to:
-    // 1. Log into the account
-    // 2. Interact with inbox (read emails, etc.)
-    // 3. Log out properly
     
     return;
   },
@@ -133,28 +135,28 @@ export const hotmailService = {
    * Fetch emails from a Hotmail account
    */
   fetchEmails: async (email: string, password: string): Promise<HotmailEmail[]> => {
+    console.log(`Fetching emails for: ${email}`);
+    
+    // In a real implementation with Puppeteer:
+    // 1. Launch browser
+    // 2. Navigate to Outlook login page
+    // 3. Log in with credentials
+    // 4. Scrape inbox for emails
+    // 5. Extract sender, subject, content and preview
+    // 6. Log out properly
+    
+    // For demo purposes, we'll return some sample emails
+    const emails: HotmailEmail[] = [
+      {
+        sender: "Microsoft Account Team",
+        subject: "Welcome to your new account",
+        content: "Thank you for creating a Microsoft account. Your account is now active and ready to use. You can access your emails, OneDrive storage, and other Microsoft services with this account.",
+        preview: "Thank you for creating a Microsoft account. Your account is now active and ready to use."
+      }
+    ];
+    
     // Simulate API delay
     await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    // Simulate occasional failures
-    if (Math.random() < 0.1) {
-      throw new Error("Failed to fetch emails: Authentication error");
-    }
-    
-    // In a real implementation, this would use Puppeteer to:
-    // 1. Log into the account
-    // 2. Navigate to inbox
-    // 3. Extract email data
-    // 4. Log out properly
-    
-    // Generate 0-3 random emails for demo purposes
-    const emailCount = Math.floor(Math.random() * 4);
-    const emails: HotmailEmail[] = [];
-    
-    for (let i = 0; i < emailCount; i++) {
-      const randomEmail = mockEmails[Math.floor(Math.random() * mockEmails.length)];
-      emails.push({...randomEmail}); // Clone to avoid reference issues
-    }
     
     return emails;
   }
