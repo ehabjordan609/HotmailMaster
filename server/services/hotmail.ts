@@ -323,7 +323,8 @@ export const hotmailService = {
             'iframe[src*="captcha"]',
             '#captcha',
             '#hipCaptcha',
-            '.captchaContainer'
+            '.captchaContainer',
+
           ];
           
           for (const selector of captchaSelectors) {
@@ -342,9 +343,10 @@ export const hotmailService = {
               pageContent.includes('captcha') ||
               pageContent.includes('CAPTCHA') ||
               pageContent.includes('verify you\'re not a robot') ||
-              pageContent.includes('security check')
+              pageContent.includes('security check') ||
+              pageContent.includes('Help us beat the robots')
             ) {
-              console.log('CAPTCHA detected via page content');
+              console.log('Co captcha');
               captchaDetected = true;
             }
           }
