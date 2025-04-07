@@ -316,7 +316,8 @@ export const hotmailService = {
         
         try {
           console.log('Checking for CAPTCHA...');
-          
+          const pageContent = await page.content();
+          console.log(pageContent, 'pageContent')
           // Look for different types of CAPTCHA elements
           const captchaSelectors = [
             'iframe[src*="recaptcha/api2"]',
