@@ -579,8 +579,8 @@ export const hotmailService = {
         
         // Enter password
         console.log('Entering password');
-        await page.waitForSelector('input[type="password"]', { timeout: 10000 });
-        await page.type('input[type="password"]', password);
+        await page.waitForSelector('input', { timeout: 10000 });
+        await page.type('input', password);
         await page.click('input[type="submit"]');
         await delay(2000);
         
