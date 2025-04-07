@@ -74,6 +74,7 @@ export const hotmailService = {
     const username = email.split('@')[0];
     
     console.log(`Creating account for ${email} with password ${password}`);
+    
     // If simulation mode, don't actually create the account
     if (process.env.ENABLE_REAL_ACCOUNT_CREATION !== 'true') {
       console.log('Simulating account creation...');
@@ -86,18 +87,9 @@ export const hotmailService = {
     
     try {
       console.log('Launching browser for real account creation...');
+      
       // Launch browser with stealth mode
-      browser = await puppeteer.launch({
-        headless: true, // Set to false for debugging
-        executablePath: puppeteer.executablePath(),
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-infobars',
-          '--window-position=0,0',
-          '--window-size=1366,768',
-        ]
-      });
+      browser = await puppeteer.launch();
       
       const page = await browser.newPage();
       
