@@ -112,42 +112,210 @@ export const hotmailService = {
       // Set a user agent that doesn't trigger bot detection
       await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36');
       
-      // Navigate to Microsoft account signup
-      await page.goto('https://signup.live.com', { waitUntil: 'networkidle2' });
+      // Navigate to Microsoft account signup with debugging information
+      const response = await page.goto('https://outlook.live.com/owa/?nlp=1&signup=1', { waitUntil: 'networkidle2' });
       console.log('Navigated to Microsoft signup page');
+      console.log('Current URL:', page.url());
+      
+      // Log page HTML for debugging
+      const pageContent = await page.content();
+      console.log('Page content length:', pageContent.length);
+      console.log('Page content sample:', pageContent.substring(0, 500) + '...');
+      
+      // Take screenshot for debugging
+      await page.screenshot({ path: '/tmp/signup-page.png' });
+      console.log('Saved screenshot to /tmp/signup-page.png');
       
       // Generate random personal info
       const personalInfo = generatePersonalInfo();
       
       try {
-        // Step 1: Enter email address
-        console.log('Entering email address');
-        await page.waitForSelector('#MemberName', { timeout: 10000 });
-        await page.type('#MemberName', username);
-        await page.click('#iSignupAction');
-        await delay(2000);
+        // Kiểm tra và nhận biết định dạng form đăng ký hiện tại
+        console.log('Kiểm tra cấu trúc trang đăng ký');
         
-        // Step 2: Enter password
-        console.log('Entering password');
-        await page.waitForSelector('#PasswordInput', { timeout: 10000 });
-        await page.type('#PasswordInput', password);
-        await page.click('#iSignupAction');
-        await delay(2000);
+        // Thử cả hai cách để xác định phiên bản UI nào đang được sử dụng
+        const isNewUI = await Promise.race([
+          page.waitForSelector('input[name="MemberName"]', { timeout: 5000 }).then(() => true).catch(() => false),
+          page.waitForSelector('#MemberName', { timeout: 5000 }).then(() => true).catch(() => false)
+        ]);
         
-        // Step 3: Enter personal information
-        console.log('Entering personal information');
-        await page.waitForSelector('#FirstName', { timeout: 10000 });
-        await page.type('#FirstName', personalInfo.firstName);
-        await page.type('#LastName', personalInfo.lastName);
-        await page.click('#iSignupAction');
-        await delay(2000);
-        
-        // Step 4: Enter birth date
-        console.log('Entering birth date');
-        await page.waitForSelector('#BirthDay', { timeout: 10000 });
-        await page.select('#BirthDay', personalInfo.birthDay.toString());
-        await page.select('#BirthMonth', personalInfo.birthMonth.toString());
-        await page.type('#BirthYear', personalInfo.birthYear.toString());
+        if (isNewUI) {
+          // Step 1: Enter email address
+          console.log('Entering email address (new UI)');
+          // Kiểm tra cả hai selector có thể có
+          try {
+            await page.waitForSelector('input[name="MemberName"]', { timeout: 5000 });
+            await page.type('input[name="MemberName"]', username);
+          } catch (e) {
+            await page.waitForSelector('#MemberName', { timeout: 5000 });
+            await page.type('#MemberName', username);
+          }
+          
+          // Tìm nút tiếp theo bằng nhiều cách khác nhau
+          try {
+            await page.waitForSelector('#iSignupAction', { timeout: 5000 });
+            await page.click('#iSignupAction');
+          } catch (e) {
+            try {
+              await page.waitForSelector('input[type="submit"]', { timeout: 5000 });
+              await page.click('input[type="submit"]');
+            } catch (e2) {
+              const nextButtons = await page.$$('button');
+              if (nextButtons.length > 0) {
+                await nextButtons[nextButtons.length - 1].click();
+              }
+            }
+          }
+          await delay(2000);
+          
+          // Step 2: Enter password
+          console.log('Entering password');
+          try {
+            await page.waitForSelector('#PasswordInput', { timeout: 5000 });
+            await page.type('#PasswordInput', password);
+          } catch (e) {
+            await page.waitForSelector('input[name="Password"]', { timeout: 5000 });
+            await page.type('input[name="Password"]', password);
+          }
+          
+          // Nhấn nút tiếp theo
+          try {
+            await page.waitForSelector('#iSignupAction', { timeout: 5000 });
+            await page.click('#iSignupAction');
+          } catch (e) {
+            try {
+              await page.waitForSelector('input[type="submit"]', { timeout: 5000 });
+              await page.click('input[type="submit"]');
+            } catch (e2) {
+              const nextButtons = await page.$$('button');
+              if (nextButtons.length > 0) {
+                await nextButtons[nextButtons.length - 1].click();
+              }
+            }
+          }
+          await delay(2000);
+          
+          // Step 3: Enter personal information
+          console.log('Entering personal information');
+          try {
+            await page.waitForSelector('#FirstName', { timeout: 5000 });
+            await page.type('#FirstName', personalInfo.firstName);
+            await page.type('#LastName', personalInfo.lastName);
+          } catch (e) {
+            await page.waitForSelector('input[name="FirstName"]', { timeout: 5000 });
+            await page.type('input[name="FirstName"]', personalInfo.firstName);
+            await page.type('input[name="LastName"]', personalInfo.lastName);
+          }
+          
+          // Nhấn nút tiếp theo
+          try {
+            await page.waitForSelector('#iSignupAction', { timeout: 5000 });
+            await page.click('#iSignupAction');
+          } catch (e) {
+            try {
+              await page.waitForSelector('input[type="submit"]', { timeout: 5000 });
+              await page.click('input[type="submit"]');
+            } catch (e2) {
+              const nextButtons = await page.$$('button');
+              if (nextButtons.length > 0) {
+                await nextButtons[nextButtons.length - 1].click();
+              }
+            }
+          }
+          await delay(2000);
+          
+          // Step 4: Enter birth date
+          console.log('Entering birth date');
+          try {
+            await page.waitForSelector('#BirthDay', { timeout: 5000 });
+            await page.select('#BirthDay', personalInfo.birthDay.toString());
+            await page.select('#BirthMonth', personalInfo.birthMonth.toString());
+            await page.type('#BirthYear', personalInfo.birthYear.toString());
+          } catch (e) {
+            // Thử với các selector khác
+            try {
+              await page.waitForSelector('select[name="BirthDay"]', { timeout: 5000 });
+              await page.select('select[name="BirthDay"]', personalInfo.birthDay.toString());
+              await page.select('select[name="BirthMonth"]', personalInfo.birthMonth.toString());
+              await page.type('input[name="BirthYear"]', personalInfo.birthYear.toString());
+            } catch (e2) {
+              // Thử tìm tất cả các thẻ select và nhập vào
+              const selects = await page.$$('select');
+              if (selects.length >= 2) {
+                await selects[0].select(personalInfo.birthMonth.toString());
+                await selects[1].select(personalInfo.birthDay.toString());
+                
+                // Tìm input cho năm sinh
+                const inputs = await page.$$('input[type="text"]');
+                for (const input of inputs) {
+                  const placeholder = await page.evaluate(el => el.getAttribute('placeholder'), input);
+                  if (placeholder && (placeholder.includes('Year') || placeholder.includes('năm'))) {
+                    await input.type(personalInfo.birthYear.toString());
+                    break;
+                  }
+                }
+              }
+            }
+          }
+        } else {
+          // Xử lý trường hợp không tìm thấy selector nào - có thể là trang đăng ký khác hoàn toàn
+          console.log('Không nhận diện được cấu trúc form, thử phương pháp khác');
+          
+          // Tìm tất cả các trường nhập liệu và điền thông tin
+          const inputs = await page.$$('input[type="text"], input[type="email"], input[type="password"]');
+          
+          if (inputs.length >= 1) {
+            // Giả định input đầu tiên là email/username
+            await inputs[0].type(username);
+            
+            // Tìm và nhấn nút tiếp theo
+            const buttons = await page.$$('button, input[type="submit"]');
+            if (buttons.length > 0) {
+              await buttons[buttons.length - 1].click();
+              await delay(2000);
+            }
+          }
+          
+          // Sau khi chuyển trang, tìm trường password
+          const passwordInputs = await page.$$('input[type="password"]');
+          if (passwordInputs.length > 0) {
+            await passwordInputs[0].type(password);
+            
+            // Tìm và nhấn nút tiếp theo
+            const buttons = await page.$$('button, input[type="submit"]');
+            if (buttons.length > 0) {
+              await buttons[buttons.length - 1].click();
+              await delay(2000);
+            }
+          }
+          
+          // Sau đó nhập thông tin cá nhân nếu có
+          const nameInputs = await page.$$('input[type="text"]');
+          if (nameInputs.length >= 2) {
+            await nameInputs[0].type(personalInfo.firstName);
+            await nameInputs[1].type(personalInfo.lastName);
+            
+            // Tìm và nhấn nút tiếp theo
+            const buttons = await page.$$('button, input[type="submit"]');
+            if (buttons.length > 0) {
+              await buttons[buttons.length - 1].click();
+              await delay(2000);
+            }
+          }
+          
+          // Cuối cùng nhập ngày sinh nếu có
+          const selects = await page.$$('select');
+          if (selects.length >= 2) {
+            await selects[0].select(personalInfo.birthMonth.toString());
+            await selects[1].select(personalInfo.birthDay.toString());
+            
+            // Tìm input năm
+            const yearInputs = await page.$$('input[type="text"]');
+            if (yearInputs.length > 0) {
+              await yearInputs[yearInputs.length - 1].type(personalInfo.birthYear.toString());
+            }
+          }
+        }
         await page.click('#iSignupAction');
         await delay(2000);
         
