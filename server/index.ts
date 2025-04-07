@@ -1,6 +1,24 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import fs from 'fs';
+import path from 'path';
+import { config } from 'dotenv';
+
+// Load environment variables from .env file
+config();
+
+// Log environment status for debugging
+const isRealAccountCreation = process.env.ENABLE_REAL_ACCOUNT_CREATION === 'true';
+const isRealAccountMaintenance = process.env.ENABLE_REAL_ACCOUNT_MAINTENANCE === 'true';
+const isRealEmailFetching = process.env.ENABLE_REAL_EMAIL_FETCHING === 'true';
+const captchaApiKey = process.env.CAPTCHA_API_KEY ? 'Available' : 'Not available';
+
+log(`Environment: ${process.env.NODE_ENV || 'not set'}`);
+log(`Real account creation: ${isRealAccountCreation}`);
+log(`Real account maintenance: ${isRealAccountMaintenance}`);
+log(`Real email fetching: ${isRealEmailFetching}`);
+log(`CAPTCHA API key: ${captchaApiKey}`);
 
 const app = express();
 app.use(express.json());
