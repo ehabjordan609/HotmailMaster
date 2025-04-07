@@ -74,7 +74,6 @@ export const hotmailService = {
     const username = email.split('@')[0];
     
     console.log(`Creating account for ${email} with password ${password}`);
-    
     // If simulation mode, don't actually create the account
     if (process.env.ENABLE_REAL_ACCOUNT_CREATION !== 'true') {
       console.log('Simulating account creation...');
