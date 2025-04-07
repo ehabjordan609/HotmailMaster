@@ -344,7 +344,7 @@ export const hotmailService = {
               pageContent.includes('CAPTCHA') ||
               pageContent.includes('verify you\'re not a robot') ||
               pageContent.includes('security check') ||
-              pageContent.includes('Help us beat the robots')
+              pageContent.includes('robots')
             ) {
               console.log('Co captcha');
               captchaDetected = true;
